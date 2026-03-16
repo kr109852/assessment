@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物理治療自我檢查評估表 | 3D 疼痛模擬</title>
+    <style>
+        :root {
+            --primary: #2c5282;
+            --secondary: #4299e1;
+            --accent: #ed8936;
+            --danger: #e53e3e;
+            --bg: #f7fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            /* 橘紅色漸層光 */
+            --pain-color-stop1: rgba(255, 69, 0, 0.7); /* 橘紅色，半透明 */
+            --pain-color-stop2: rgba(255, 69, 0, 0);   /* 全透明 */
+        }
+
+        body {
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg);
+            color: #2d3748;
+            margin: 0;
+            padding: 10px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 850px;
+            margin: 20px auto;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid var(--primary); padding-bottom: 15px; }
+        h1 { color: var(--primary); margin: 0; font-size: 1.6rem; }
+
+        .section { margin-bottom: 35px; }
+        .section-header { 
+            background: #edf2f7; 
+            padding: 8px 15px; 
+            border-left: 5px solid var(--primary); 
+            font-weight: bold; 
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+
+        /* 欄位配置 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.95rem; }
+        
+        input[type="text"], input[type="number"], input[type="tel"], select, textarea {
+            width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box;
+        }
+
+        /* 3D 疼痛部位與人體圖容器 */
+        .pain-container { display: flex; flex-wrap: wrap; gap: 20px; }
+        .checkbox-group { flex: 1; min-width: 200px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .body-visual-3d { 
+            flex: 1; 
+            min-width: 250px; 
+            text-align: center; 
+            background: black; /* 純黑背景 */
+            padding: 10px; 
+            border-radius: 10px; 
+            position: relative; /* 重要：為遮罩定位 */
+            overflow: hidden; /* 防止漸層光溢出 */
+        }
+        
+        /* 基礎點雲人體模型 (Data URI) */
+        .base-model {
+            width: 100%;
+            height: auto;
+            display: block;
+            image-rendering: pixelated; /* 強化點雲顆粒感 */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            /* 內嵌簡易 placeholders PNG (純黑背景, 白色點) 代替 3D 模型 */
+            background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUzAAAN4AAAGQCAYAAACOfE0mAAAACXBIWXMAAAsTAAALEwEAmpwYAAADG0lEQVR4nO3VMREAAAABMPwXzGfHnICuAAAAAElFTkSuQmCC");
+            background-size: cover;
+            background-position: center;
+            opacity: 0.8;
+            border-radius: 5px;
+        }
+
+        /* 基礎遮罩樣式 (絕對定位) */
+        .pain-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none; /* 預設隱藏 */
+            pointer-events: none; /* 重要：不影響點擊 */
+            border-radius: 5px;
+        }
+
+        /* 為每個部位設置特定的橘紅色漸層光 */
+        /* 頸部 */
+        .neck-overlay { background: radial-gradient(circle at 50% 12%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 15%); }
+        /* 肩膀 */
+        .shoulder-overlay { background: radial-gradient(ellipse at 30% 20%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 25%); }
+        .shoulder-alt-overlay { background: radial-gradient(ellipse at 70% 20%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 25%); }
+        /* 上背 */
+        .back-up-overlay { background: radial-gradient(circle at 50% 35%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 30%); }
+        /* 下背 */
+        .back-low-overlay { background: linear-gradient(180deg, var(--pain-color-stop2) 0%, var(--pain-color-stop1) 35%, var(--pain-color-stop1) 65%, var(--pain-color-stop2) 100%); width: 40%; height: 30%; top: 40%; left: 30%; border-radius: 10px;}
+        /* 手肘 */
+        .elbow-overlay { background: radial-gradient(circle at 22% 45%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+        .elbow-alt-overlay { background: radial-gradient(circle at 78% 45%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+        /* 手腕 */
+        .wrist-overlay { background: radial-gradient(circle at 18% 65%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+        .wrist-alt-overlay { background: radial-gradient(circle at 82% 65%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+        /* 髖部 */
+        .hip-overlay { background: radial-gradient(circle at 50% 55%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 25%); }
+        /* 膝蓋 */
+        .knee-overlay { background: radial-gradient(circle at 35% 75%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 15%); }
+        .knee-alt-overlay { background: radial-gradient(circle at 65% 75%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 15%); }
+        /* 腳踝 */
+        .ankle-overlay { background: radial-gradient(circle at 35% 92%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+        .ankle-alt-overlay { background: radial-gradient(circle at 65% 92%, var(--pain-color-stop1) 0%, var(--pain-color-stop2) 10%); }
+
+        /* 一般勾選區 */
+        .check-item { display: flex; align-items: center; margin-bottom: 8px; font-weight: normal; cursor: pointer; }
+        input[type="checkbox"], input[type="radio"] { margin-right: 10px; width: 16px; height: 16px; }
+
+        /* 警訊區 */
+        .warning-box { background: #fff5f5; border: 1px solid #feb2b2; padding: 15px; border-radius: 8px; }
+        .red-flag { color: var(--danger); font-weight: bold; }
+
+        .btn-submit {
+            width: 100%; padding: 18px; background: var(--primary); color: white; border: none;
+            border-radius: 8px; font-size: 1.2rem; cursor: pointer; transition: 0.3s;
+        }
+        .btn-submit:hover { background: var(--secondary); }
+
+        #summaryOutput {
+            margin-top: 30px; padding: 25px; background: #e6fffa; border-radius: 8px; display: none; border: 1px solid #38b2ac;
+        }
+
+        @media (max-width: 600px) { .checkbox-group { grid-template-columns: 1fr; } .pain-container { flex-direction: column-reverse; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>物理治療自我檢查評估表</h1>
+    </header>
+
+    <form id="ptForm">
+        <div class="section">
+            <div class="section-header">一、基本資料</div>
+            <div class="grid">
+                <div class="form-group"><label>姓名</label><input type="text" name="name" required></div>
+                <div class="form-group"><label>年齡</label><input type="number" name="age"></div>
+                <div class="form-group"><label>性別</label><select name="gender"><option>男</option><option>女</option><option>其他</option></select></div>
+            </div>
+            <div class="grid">
+                <div class="form-group"><label>職業</label><input type="text" name="job"></div>
+                <div class="form-group"><label>聯絡方式</label><input type="tel" name="phone"></div>
+                <div class="form-group"><label>身高/體重</label><input type="text" placeholder="170/65" name="hw"></div>
+            </div>
+            <div class="form-group">
+                <label>是否第一次就診？</label>
+                <label class="check-item"><input type="radio" name="firstVisit" value="是"> 是</label>
+                <label class="check-item"><input type="radio" name="firstVisit" value="否"> 否</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">二、主要困擾</div>
+            <div class="form-group"><label>1. 目前最困擾的問題</label><textarea name="issue" rows="2"></textarea></div>
+            <div class="form-group">
+                <label>2. 症狀持續多久</label>
+                <select name="duration"><option>1週內</option><option>1個月內</option><option>3個月以上</option></select>
+            </div>
+            <div class="form-group">
+                <label>3. 是否曾復發？</label>
+                <label class="check-item"><input type="radio" name="recur" value="是"> 是</label>
+                <label class="check-item"><input type="radio" name="recur" value="否"> 否</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">三、疼痛與不適評估</div>
+            <div class="pain-container">
+                <div class="checkbox-group">
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="neck" name="part" value="頸部"> 頸部</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="shoulder" name="part" value="肩膀"> 肩膀</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="back-up" name="part" value="上背"> 上背</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="back-low" name="part" value="下背"> 下背</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="elbow" name="part" value="手肘"> 手肘</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="wrist" name="part" value="手腕"> 手腕</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="hip" name="part" value="髖部"> 髖部</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="knee" name="part" value="膝蓋"> 膝蓋</label>
+                    <label class="check-item"><input type="checkbox" class="part-check" data-part="ankle" name="part" value="腳踝"> 腳踝</label>
+                </div>
+                <div class="body-visual-3d">
+                    <p style="font-size:0.8rem; color:#888;">3D 疼痛模擬 (附圖風格)</p>
+                    <img id="baseModelImg" class="base-model" src="" alt="3D Human Model">
+                    <div id="neckOverlay" class="pain-overlay neck-overlay"></div>
+                    <div id="shoulderOverlay" class="pain-overlay shoulder-overlay"></div>
+                    <div id="shoulderAltOverlay" class="pain-overlay shoulder-alt-overlay"></div>
+                    <div id="backUpOverlay" class="pain-overlay back-up-overlay"></div>
+                    <div id="backLowOverlay" class="pain-overlay back-low-overlay"></div>
+                    <div id="elbowOverlay" class="pain-overlay elbow-overlay"></div>
+                    <div id="elbowAltOverlay" class="pain-overlay elbow-alt-overlay"></div>
+                    <div id="wristOverlay" class="pain-overlay wrist-overlay"></div>
+                    <div id="wristAltOverlay" class="pain-overlay wrist-alt-overlay"></div>
+                    <div id="hipOverlay" class="pain-overlay hip-overlay"></div>
+                    <div id="kneeOverlay" class="pain-overlay knee-overlay"></div>
+                    <div id="kneeAltOverlay" class="pain-overlay knee-alt-overlay"></div>
+                    <div id="ankleOverlay" class="pain-overlay ankle-overlay"></div>
+                    <div id="ankleAltOverlay" class="pain-overlay ankle-alt-overlay"></div>
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:15px;">
+                <label>疼痛程度 (0-10)： <span id="painV">5</span></label>
+                <input type="range" name="painLevel" min="0" max="10" value="5" oninput="document.getElementById('painV').innerText=this.value">
+            </div>
+            <label>疼痛性質：</label>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="nature" value="痠"> 痠</label>
+                <label class="check-item"><input type="checkbox" name="nature" value="刺痛"> 刺痛</label>
+                <label class="check-item"><input type="checkbox" name="nature" value="麻"> 麻</label>
+                <label class="check-item"><input type="checkbox" name="nature" value="緊繃"> 緊繃</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">四、活動功能評估 (勾選困難動作)</div>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="act" value="低頭"> 低頭</label>
+                <label class="check-item"><input type="checkbox" name="act" value="抬手"> 抬手</label>
+                <label class="check-item"><input type="checkbox" name="act" value="彎腰"> 彎腰</label>
+                <label class="check-item"><input type="checkbox" name="act" value="深蹲"> 深蹲</label>
+                <label class="check-item"><input type="checkbox" name="act" value="上下樓梯"> 上下樓梯</label>
+                <label class="check-item"><input type="checkbox" name="act" value="久坐/站"> 久坐/站</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">五、生活型態評估</div>
+            <label>工作型態：</label>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="work" value="久坐"> 久坐</label>
+                <label class="check-item"><input type="checkbox" name="work" value="搬重物"> 搬重物</label>
+                <label class="check-item"><input type="checkbox" name="work" value="重複動作"> 重複動作</label>
+            </div>
+            <label>每日 3C 使用時間：</label>
+            <select name="3c"><option>< 2小時</option><option>2-5小時</option><option>5小時以上</option></select>
+            <label style="margin-top:10px;">運動習慣：</label>
+            <select name="exercise"><option>無運動</option><option>每週1-2次</option><option>每週3次以上</option></select>
+        </div>
+
+        <div class="section">
+            <div class="section-header">六、健康與病史</div>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="history" value="椎間盤突出"> 椎間盤突出</label>
+                <label class="check-item"><input type="checkbox" name="history" value="脊椎側彎"> 脊椎側彎</label>
+                <label class="check-item"><input type="checkbox" name="history" value="手術史"> 手術史</label>
+                <label class="check-item"><input type="checkbox" name="history" value="糖尿病/高血壓"> 糖尿病/高血壓</label>
+            </div>
+            <input type="text" name="otherHistory" placeholder="其他病史填寫">
+        </div>
+
+        <div class="section">
+            <div class="section-header" style="background:#fed7d7; color:var(--danger)">七、症狀警訊 (Red Flags) (必填)</div>
+            <div class="warning-box">
+                <label class="check-item red-flag"><input type="checkbox" name="redflag" value="體重下降"> 不明原因體重下降</label>
+                <label class="check-item red-flag"><input type="checkbox" name="redflag" value="夜間痛"> 持續夜間疼痛</label>
+                <label class="check-item red-flag"><input type="checkbox" name="redflag" value="麻木延伸"> 麻木延伸到手或腳</label>
+                <label class="check-item red-flag"><input type="checkbox" name="redflag" value="大小便異常"> 大小便控制異常</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">八、生活品質影響</div>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="qol" value="工作"> 工作</label>
+                <label class="check-item"><input type="checkbox" name="qol" value="睡眠"> 睡眠</label>
+                <label class="check-item"><input type="checkbox" name="qol" value="運動"> 運動</label>
+                <label class="check-item"><input type="checkbox" name="qol" value="情緒"> 情緒</label>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">九、治療目標</div>
+            <div class="grid">
+                <label class="check-item"><input type="checkbox" name="goal" value="減少疼痛"> 減少疼痛</label>
+                <label class="check-item"><input type="checkbox" name="goal" value="改善姿勢"> 改善姿勢</label>
+                <label class="check-item"><input type="checkbox" name="goal" value="恢復日常"> 恢復日常</label>
+                <label class="check-item"><input type="checkbox" name="goal" value="表現提升"> 表現提升</label>
+            </div>
+        </div>
+
+        <button type="button" class="btn-submit" onclick="submitAssessment()">提交評估表</button>
+    </form>
+
+    <div id="summaryOutput">
+        <h3>評估結果摘要 (物理治療師參考)</h3>
+        <div id="summaryText"></div>
+    </div>
+</div>
+
+<script>
+    // 監聽 3D 部位勾選變更
+    const partToOverlayMap = {
+        'neck': ['neckOverlay'],
+        'shoulder': ['shoulderOverlay', 'shoulderAltOverlay'],
+        'back-up': ['backUpOverlay'],
+        'back-low': ['backLowOverlay'],
+        'elbow': ['elbowOverlay', 'elbowAltOverlay'],
+        'wrist': ['wristOverlay', 'wristAltOverlay'],
+        'hip': ['hipOverlay'],
+        'knee': ['kneeOverlay', 'kneeAltOverlay'],
+        'ankle': ['ankleOverlay', 'ankleAltOverlay']
+    };
+
+    document.querySelectorAll('.part-check').forEach(box => {
+        box.addEventListener('change', function() {
+            const part = this.dataset.part;
+            const overlays = partToOverlayMap[part];
+            
+            if (overlays) {
+                overlays.forEach(overlayId => {
+                    const overlay = document.getElementById(overlayId);
+                    if (overlay) {
+                        overlay.style.display = this.checked ? 'block' : 'none';
+                    }
+                });
+            }
+        });
+    });
+
+    function submitAssessment() {
+        const form = document.getElementById('ptForm');
+        const data = new FormData(form);
+        const out = document.getElementById('summaryText');
+        
+        let redFlagCount = data.getAll('redflag').length;
+        let redFlagAlert = redFlagCount > 0 ? `<p style="color:red; font-weight:bold;">🚨 警訊提示：患者勾選了 ${redFlagCount} 項 Red Flags，需優先排除紅旗狀況。</p>` : "";
+
+        let content = `
+            ${redFlagAlert}
+            <p><strong>基本資料：</strong>${data.get('name')} | ${data.get('age')}歲 | ${data.get('gender')} | 職業：${data.get('job')}</p>
+            <p><strong>疼痛部位：</strong>${data.getAll('part').join(', ') || '未勾選'}</p>
+            <p><strong>疼痛等級：</strong>${data.get('painLevel')} (性質：${data.getAll('nature').join('/')})</p>
+            <p><strong>功能受限：</strong>${data.getAll('act').join(', ') || '無'}</p>
+            <p><strong>過往病史：</strong>${data.getAll('history').join(', ')} ${data.get('otherHistory')}</p>
+            <p><strong>治療目標：</strong>${data.getAll('goal').join(', ')}</p>
+        `;
+        
+        out.innerHTML = content;
+        document.getElementById('summaryOutput').style.display = 'block';
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+</script>
+</body>
+</html>
